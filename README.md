@@ -35,6 +35,9 @@ Public, real-time threat monitoring for the XDC Network.
 - Expanded real-time bridge asset oversight
 - Automated alert notifications
 
+## 📄 Project Whitepaper
+You can read the full Project XDC-Intel whitepaper [here](XDC-Intel-Whitepaper.md).
+
 ---
 
 Maintained by **MrBlockchain22**  

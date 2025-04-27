@@ -17,7 +17,7 @@ Public, real-time threat monitoring for the XDC Network.
 ## 🚨 Threat Monitoring Scope
 
 - Scanning for malicious contract interactions
-- Oversight of Circle’s USDC.e bridge deployments
+- Oversight of Circle’s USDC bridge deployments
 - Monitoring large movements affecting XDC infrastructure
 - Public reporting of suspicious activity (via GitHub Issues)
 

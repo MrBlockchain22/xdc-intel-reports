@@ -1,0 +1,31 @@
+name: Refresh README After Scan
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  update-readme:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Update timestamp
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tzdata
+          TZ=America/New_York date +"🕒 Last Updated: %d %b %Y, %I:%M %p EST (%H:%M UTC)" > update_time.txt
+          echo "" >> README.md
+          echo "### Status" >> README.md
+          cat update_time.txt >> README.md
+          rm update_time.txt
+
+      - name: Commit and Push
+        run: |
+          git config --global user.name 'xdc-intel-bot'
+          git config --global user.email 'intelbot@xdc.org'
+          git add README.md
+          git commit -m "Auto-refresh: Updated scan timestamp"
+          git push

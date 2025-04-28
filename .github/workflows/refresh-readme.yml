@@ -1,9 +1,9 @@
-name: Refresh README After Scan
+name: Update README Timestamp
 
 on:
-  push:
-    branches:
-      - main
+  schedule:
+    - cron: '0 * * * *'  # Every hour
+  workflow_dispatch:
 
 jobs:
   update-readme:
@@ -12,15 +12,25 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Update timestamp
+      - name: Install tzdata
         run: |
           sudo apt-get update
           sudo apt-get install -y tzdata
-          TZ=America/New_York date +"🕒 Last Updated: %d %b %Y, %I:%M %p EST (%H:%M UTC)" > update_time.txt
-          echo "" >> README.md
-          echo "### Status" >> README.md
-          cat update_time.txt >> README.md
-          rm update_time.txt
+
+      - name: Update timestamp in README
+        run: |
+          # Set timezone and create new timestamp
+          export TZ="America/New_York"
+          new_timestamp=$(date +"🕒 Last Updated: %d %b %Y, %I:%M %p EST (%H:%M UTC)")
+
+          # Replace the existing timestamp line or add it if missing
+          if grep -q "🕒 Last Updated:" README.md; then
+            sed -i "s|🕒 Last Updated:.*|$new_timestamp|" README.md
+          else
+            echo "" >> README.md
+            echo "### Status" >> README.md
+            echo "$new_timestamp" >> README.md
+          fi
 
       - name: Commit and Push
         run: |

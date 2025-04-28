@@ -1,41 +1,37 @@
-name: Update README Timestamp
+name: Update README Status
 
 on:
+  push:
+    paths:
+      - "data/**"
   schedule:
-    - cron: '0 * * * *'  # Every hour
+    - cron: "0 * * * *" # every hour check/update
   workflow_dispatch:
 
 jobs:
   update-readme:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Install tzdata
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.x
+
+      - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y tzdata
+          pip install pandas pytz
 
-      - name: Update timestamp in README
+      - name: Update README status fields
         run: |
-          # Set timezone and create new timestamp
-          export TZ="America/New_York"
-          new_timestamp=$(date +"🕒 Last Updated: %d %b %Y, %I:%M %p EST (%H:%M UTC)")
+          python update_readme_status_fields.py
 
-          # Replace the existing timestamp line or add it if missing
-          if grep -q "🕒 Last Updated:" README.md; then
-            sed -i "s|🕒 Last Updated:.*|$new_timestamp|" README.md
-          else
-            echo "" >> README.md
-            echo "### Status" >> README.md
-            echo "$new_timestamp" >> README.md
-          fi
-
-      - name: Commit and Push
+      - name: Commit and Push changes
         run: |
           git config --global user.name 'xdc-intel-bot'
           git config --global user.email 'intelbot@xdc.org'
           git add README.md
-          git commit -m "Auto-refresh: Updated scan timestamp"
+          git commit -m "Auto-refresh: Updated system status after scans"
           git push

@@ -4,7 +4,7 @@
 
 In a decentralized world, **security cannot be outsourced**. Recognizing the urgent need for proactive, independent threat monitoring, we launched **Project XDC-Intel** — the first fully autonomous, public-facing cybersecurity system designed specifically for the XDC Network.
 
-With twice-daily scans, public GitHub reporting, and dynamic X (Twitter) notifications, XDC-Intel strengthens trust in the network's bridges and critical infrastructure. Built without fanfare. Deployed without permission. Focused purely on protecting XDC from within.
+With daily  scans, public GitHub reporting, and dynamic X (Twitter) notifications, XDC-Intel strengthens trust in the network's bridges and critical infrastructure. Built without fanfare. Focused purely on protecting XDC from within.
 
 ---
 
@@ -31,6 +31,22 @@ Whether threats are found or not, **the community knows**.
 There is no more guessing. No more waiting for disasters.
 
 ---
+📡 Scan Schedule and Frequency
+
+The XDC Threat Monitoring System performs continuous monitoring of blockchain activity to detect threats and critical events in near real-time.
+
+Initially, scans were scheduled twice per day (3:00 AM and 3:00 PM UTC). However, in pursuit of faster detection and broader coverage across all time zones, the system has been upgraded.
+
+✅ Current Schedule:
+Frequency: Every hour, 24 times per day
+Time Standard: UTC (Coordinated Universal Time)
+Purpose: Rapid detection of bridge-related anomalies, critical movements, and emerging threats
+This hourly cadence ensures:
+
+Faster identification of high-value transactions across the USDC bridge
+Immediate alerts for suspicious contract interactions
+A stronger and more resilient early warning system for the XDC community
+The results of every scan are automatically published to GitHub for transparency, and future system upgrades will include on-chain alerts and AI-powered pattern recognition.
 
 ## 4. Architecture Overview
 
@@ -38,7 +54,7 @@ There is no more guessing. No more waiting for disasters.
 
 - VPS Linux Server (Contabo)
 - Python-based blockchain scanners (bridge scam detection, critical infrastructure monitoring)
-- Scheduled cronjobs (3AM / 3PM UTC)
+- Scheduled cronjobs (every hour)
 - GitHub Actions: automatic push of new reports
 - Dynamic X posting system via tweepy API
 

@@ -9,7 +9,7 @@ Public, real-time threat monitoring for the XDC Network.
 ## 📈 System Status
 
 | Metric | Status |
-| Last Scan Time | 2025-04-28 22:01:15 UTC (06:01 PM EST)
+| Last Scan Time | 2025-04-28 22:22:30 UTC (06:22 PM EST)
 | Last Threat Detected | None Detected
 | Last Critical Movement | None Detected
 

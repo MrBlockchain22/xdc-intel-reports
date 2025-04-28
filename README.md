@@ -1,5 +1,7 @@
 # 🛡️ XDC Threat Intelligence Monitoring
 
+![Last Commit](https://img.shields.io/github/last-commit/MrBlockchain22/xdc-intel-reports?logo=github&logoColor=white&color=4caf50&label=Last%20Update)
+
 Public, real-time threat monitoring for the XDC Network.
 
 ---

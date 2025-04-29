@@ -29,9 +29,14 @@ jobs:
           python update_readme_status_fields.py
 
       - name: Commit and Push changes
-        run: |
-          git config --global user.name 'xdc-intel-bot'
-          git config --global user.email 'intelbot@xdc.org'
-          git add README.md
-          git commit -m "Auto-refresh: Updated system status after scans"
-          git push
+  run: |
+    git config --global user.name 'xdc-intel-bot'
+    git config --global user.email 'bot@xdcintel.org'
+    git add .
+    if git diff --cached --quiet; then
+      echo "No changes to commit."
+    else
+      git commit -m "Auto-update README"
+      git push
+    fi
+

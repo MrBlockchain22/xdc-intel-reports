@@ -6,12 +6,13 @@ Public, real-time threat monitoring for the XDC Network.
 
 ---
 
-## 📈 System Status
+## 🕒 System Status
 
-| Metric | Status |
-| Last Scan Time | 2025-04-29 16:28:57 UTC (12:28 PM EST)
-| Last Threat Detected | None Detected
-| Last Critical Movement | None Detected
+| Metric                | Status                                                             |
+|-----------------------|---------------------------------------------------------------------|
+| **Last Scan Time**    | 2025-04-29 16:28:57 UTC (12:28 PM EST)                             |
+| **Last Threat Detected** | None Detected                                                     |
+| **Last Critical Movement** | None Detected                                                 |
 
 ---
 
@@ -45,5 +46,4 @@ Maintained by **MrBlockchain22**
 Follow for updates and security alerts.
 Follow me on X @Mr_Blockchain22
 
-### Status
-🕒 Last Updated: 28 Apr 2025, 05:03 PM EST (17:03 UTC)
+

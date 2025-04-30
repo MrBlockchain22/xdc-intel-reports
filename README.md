@@ -19,8 +19,8 @@ Public, real-time threat monitoring for the XDC Network.
 ## 🚨 Threat Monitoring Scope
 
 - Scanning for malicious contract interactions
-- Oversight of Circle’s USDC bridge deployments
-- Monitoring large movements affecting XDC infrastructure
+- Oversight of Circle’s USDC bridge high volume transactions
+- Monitoring large movements affecting XDC infrastructure (Pending)
 - Public reporting of suspicious activity (via GitHub Issues)
 
 ---
@@ -34,7 +34,7 @@ Public, real-time threat monitoring for the XDC Network.
 ## ⚡ Future Upgrades
 
 - AI-based predictive threat detection
-- Expanded real-time bridge asset oversight
+- Expanded near real-time bridge asset oversight
 - Automated alert notifications
 
 ## 📄 Project Whitepaper
@@ -44,6 +44,6 @@ You can read the full Project XDC-Intel whitepaper [here](XDC-Intel-Whitepaper.m
 
 Maintained by **MrBlockchain22**  
 Follow for updates and security alerts.
-Follow me on X @Mr_Blockchain22
+[Follow me on X @Mr_Blockchain22](https://x.com/Mr_Blockchain22)
 
 

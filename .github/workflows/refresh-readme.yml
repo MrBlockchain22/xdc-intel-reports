@@ -26,7 +26,7 @@ jobs:
 
       - name: Update README status fields
         run: |
-          python update_readme_status_fields.py
+          python scripts/update_readme_status_fields.py
 
       - name: Set up SSH
         run: |

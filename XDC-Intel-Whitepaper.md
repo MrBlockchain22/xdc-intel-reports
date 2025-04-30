@@ -22,9 +22,9 @@ In recent years, major blockchain exploits have overwhelmingly targeted cross-ch
 
 XDC-Intel fills the critical gap:
 
-- ✅ Twice-daily autonomous blockchain scans
+- ✅ Hourly autonomous blockchain scans
 - ✅ Public threat reports posted to GitHub
-- ✅ Immediate alerts or "heartbeat" messages posted to X
+- ✅ Immediate alerts or "heartbeat" messages posted to X (Pending)
 - ✅ Open-source transparency of threat intelligence logic
 
 Whether threats are found or not, **the community knows**.  
@@ -43,20 +43,20 @@ Time Standard: UTC (Coordinated Universal Time)
 Purpose: Rapid detection of bridge-related anomalies, critical movements, and emerging threats
 This hourly cadence ensures:
 
-Faster identification of high-value transactions across the USDC bridge
-Immediate alerts for suspicious contract interactions
-A stronger and more resilient early warning system for the XDC community
+Faster identification of high-value transactions across the USDC bridge. Current threshold set to $5000 USD or higher. 
+Immediate alerts for suspicious contract interactions.
+A stronger and more resilient early warning system for the XDC community.
 The results of every scan are automatically published to GitHub for transparency, and future system upgrades will include on-chain alerts and AI-powered pattern recognition.
 
 ## 4. Architecture Overview
 
 **XDC-Intel Architecture:**
 
-- VPS Linux Server (Contabo)
+- VPS Linux Server 
 - Python-based blockchain scanners (bridge scam detection, critical infrastructure monitoring)
 - Scheduled cronjobs (every hour)
 - GitHub Actions: automatic push of new reports
-- Dynamic X posting system via tweepy API
+- Dynamic X posting system via tweepy API (Pending)
 
 **Public Transparency:**  
 All threat reports, code updates, and system status logs are openly published.
@@ -66,7 +66,7 @@ All threat reports, code updates, and system status logs are openly published.
 ## 5. Deployment and Automation
 
 - ✅ VPS-based fully autonomous operations
-- ✅ Cronjob-managed scans twice daily
+- ✅ Cronjob-managed scans hourly
 - ✅ Automated README heartbeat updates
 - ✅ Safe separation between testing and live posting scripts
 - ✅ Robust fallback in case of RPC overloads (planned)
@@ -115,7 +115,7 @@ The mission is simple:
 
 Stay connected:  
 - [GitHub: XDC-Intel-Reports](https://github.com/MrBlockchain22/xdc-intel-reports)
-- [Follow live updates on X](https://twitter.com/youraccount)
+- [Follow live updates on X](https://x.com/Mr_Blockchain22)
 
 The bridge between silence and security has been built.  
 And it is being guarded.

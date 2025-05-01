@@ -1,4 +1,2 @@
 .env
-scripts/
-*.py
-*.sh
+*.json

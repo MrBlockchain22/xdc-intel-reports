@@ -10,7 +10,6 @@ git pull origin main
 export $(grep -v '^#' /root/xdc-intel/.env | xargs)
 
 # --- Start of integrated update_readme_status_fields.py logic ---
-# Required imports in bash (we'll use Python inline)
 python3 << 'END_PYTHON'
 import re
 from datetime import datetime
@@ -68,7 +67,7 @@ else:
 
 # Prepare status values
 last_large_transfer = f"Detected ({len(transfers_df)} transfers ≥ $5,000)" if len(transfers_df) > 0 else "None Detected"
-last_smart_contract = f"Detected ({len(contracts_df)} contracts)" if len(contracts_df) > 0 else "None Detected"
+last_smart_contract = f"Detected ({len(contracts_df)} contracts)" if len(transfers_df) > 0 else "None Detected"
 
 # Read README
 with open(readme_path, "r") as file:
@@ -97,3 +96,5 @@ else
     echo "[+] Changes pushed to GitHub."
 fi
 
+# Post to X for large transfers
+python3 /root/xdc-intel-reports/scripts/post_to_x.py --type large_transfers

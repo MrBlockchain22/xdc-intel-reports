@@ -10,9 +10,9 @@ Public, real-time threat monitoring for the XDC Network.
 
 | Metric                | Status                                                             |
 |-----------------------|---------------------------------------------------------------------|
-| **Last Scan Time**    | 2025-04-29 16:28:57 UTC (12:28 PM EST)                             |
-| **Last Threat Detected** | None Detected                                                     |
-| **Last Critical Movement** | None Detected                                                 |
+| **Last Scan Time**    | 2025-05-01 19:04:31 UTC (03:04 PM EST)                             |
+| **Last Large Transfer** | Detected (1 transfers ≥ $5,000) |
+| **Last Smart Contract** | None Detected                  |
 
 ---
 

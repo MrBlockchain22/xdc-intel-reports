@@ -153,18 +153,6 @@ def fetch_usdc_transfers(start_block, end_block):
 
     return transfers
 
-# Get the USDC.e balance of a specific address (placeholder for bridge)
-def get_bridge_balance(address):
-    w3 = get_web3()
-    contract = w3.eth.contract(address=USDC_E_ADDRESS, abi=USDC_E_ABI)
-    try:
-        balance = contract.functions.balanceOf(address).call()
-        decimals = 6  # USDC.e uses 6 decimals
-        return balance / (10 ** decimals)
-    except Exception as e:
-        log_message(f"Error fetching balance for {address}: {str(e)}")
-        return 0
-
 # Main function
 def main():
     start_time = time.time()
@@ -177,7 +165,6 @@ def main():
     w3 = get_web3()
     end_block = w3.eth.block_number
     log_message(f"Current block number: {end_block}")
-    # Force a full 24-hour scan for this run
     start_block = get_last_block()
     log_message(f"Scanning blocks {start_block} to {end_block}")
 
@@ -203,10 +190,6 @@ def main():
             filtered_transfers.append(transfer)
         else:
             log_message(f"Transfer {transfer['tx_hash']} filtered out: ${value_usd:.2f} < $5,000 threshold")
-
-    # Since BRIDGE_ADDRESS is not yet known, skip balance check for now
-    bridge_balance = 0  # Temporary until bridge address is confirmed
-    log_message("Bridge address not set. Skipping balance check.")
 
     # Save to CSV
     if filtered_transfers:

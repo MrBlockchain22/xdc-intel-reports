@@ -1,6 +1,8 @@
+#!/usr/bin/env python3
 import os
 import pandas as pd
 from datetime import datetime
+import pytz
 from pathlib import Path
 import tweepy
 from dotenv import load_dotenv
@@ -35,6 +37,14 @@ def get_latest_csv(prefix):
         return None
     return max(csv_files, key=lambda x: x.stat().st_mtime)
 
+# Shorten address for display
+def shorten_address(address):
+    return f"{address[:6]}...{address[-4:]}"
+
+# Shorten transaction hash for display
+def shorten_tx_hash(tx_hash):
+    return f"{tx_hash[:6]}..."
+
 # Post to Twitter
 def post_to_twitter():
     log_message("Starting post_to_x.py...")
@@ -53,66 +63,65 @@ def post_to_twitter():
         usdc_transfers = pd.read_csv(latest_usdc_csv)
         log_message(f"Found USDC.e transfers CSV: {latest_usdc_csv}")
 
-    # Get USDC.e bridge balance (placeholder until bridge address is confirmed)
-    balance_file = DATA_DIR / "usdc_bridge_balance.txt"
-    bridge_balance = "N/A"
-    if balance_file.exists():
-        with open(balance_file, 'r') as f:
-            bridge_balance = float(f.read().strip())
-        log_message(f"USDC.e bridge balance: {bridge_balance}")
-
-    # Prepare summary tweet (only if there are transfers to report)
-    summary_parts = []
-    if not xdc_transfers.empty:
-        summary_parts.append(f"- Large XDC Transfers: {len(xdc_transfers)}")
-    if not usdc_transfers.empty:
-        summary_parts.append(f"- USDC.e Transfers: {len(usdc_transfers)}")
-    summary_parts.append(f"- USDC.e Bridge Balance: {bridge_balance} USDC.e (TBD)")
-    summary_parts.append("Details: https://github.com/MrBlockchain22/xdc-intel-reports")
-
     try:
-        last_tweet_id = None
-        # Post summary tweet only if there are transfers
+        # Post XDC transfers (keep existing format for now)
+        if not xdc_transfers.empty:
+            for _, transfer in xdc_transfers.iterrows():
+                tx_hash = transfer['tx_hash']
+                value_xdc = transfer['value_xdc']
+                value_usd = transfer['value_usd']
+                token_symbol = transfer['token_symbol']
+                timestamp = transfer['timestamp']
+                # Convert timestamp to UTC and EST
+                utc_time = datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S").replace(tzinfo=pytz.UTC)
+                est_time = utc_time.astimezone(pytz.timezone('US/Eastern'))
+                utc_str = utc_time.strftime("%d %b %Y, %H:%M UTC")
+                est_str = est_time.strftime("%I:%M %p EST")
+                short_tx = shorten_tx_hash(tx_hash)
+                tweet = (
+                    f"Big moves on #XDCNetwork! 🚀\n"
+                    f"{utc_str} ({est_str})\n"
+                    f"1 large transfer (${value_usd:,.2f}) detected! 📈\n"
+                    f"{value_xdc:,.2f} {token_symbol} (${value_usd:,.2f}) transferred\n"
+                    f"From: {shorten_address(transfer['from'])}\n"
+                    f"To: {shorten_address(transfer['to'])}\n"
+                    f"{est_time.strftime('%d %b %Y, %I:%M %p EST')}\n"
+                    f"Tx: {short_tx} View on XDCScan: xdcscan.io/tx/{tx_hash}\n"
+                    f"#XDC #blockchain 🎉"
+                )
+                api.update_status(tweet)
+                log_message(f"Posted XDC transfer: {tx_hash}")
+
+        # Post USDC.e transfers in the same style
+        if not usdc_transfers.empty:
+            for _, transfer in usdc_transfers.iterrows():
+                tx_hash = transfer['tx_hash']
+                value_usdc = transfer['value_usdc']
+                value_usd = transfer['value_usd']
+                token_symbol = transfer['token_symbol']
+                timestamp = transfer['timestamp']
+                # Convert timestamp to UTC and EST
+                utc_time = datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S").replace(tzinfo=pytz.UTC)
+                est_time = utc_time.astimezone(pytz.timezone('US/Eastern'))
+                utc_str = utc_time.strftime("%d %b %Y, %H:%M UTC")
+                est_str = est_time.strftime("%I:%M %p EST")
+                short_tx = shorten_tx_hash(tx_hash)
+                tweet = (
+                    f"Big moves on #XDCNetwork! 🚀\n"
+                    f"{utc_str} ({est_str})\n"
+                    f"1 large {token_symbol} transfer (${value_usd:,.2f}) detected! 📈\n"
+                    f"{value_usdc:,.2f} {token_symbol} (${value_usd:,.2f}) transferred\n"
+                    f"From: {shorten_address(transfer['from'])}\n"
+                    f"To: {shorten_address(transfer['to'])}\n"
+                    f"{est_time.strftime('%d %b %Y, %I:%M %p EST')}\n"
+                    f"Tx: {short_tx} View on XDCScan: xdcscan.io/tx/{tx_hash}\n"
+                    f"#XDC #blockchain 🎉"
+                )
+                api.update_status(tweet)
+                log_message(f"Posted USDC.e transfer: {tx_hash}")
+
         if xdc_transfers.empty and usdc_transfers.empty:
             log_message("No transfers to report. Skipping X post.")
-            return
-
-        summary = "XDC Network Activity Report\n" + "\n".join(summary_parts)
-        summary_tweet = api.update_status(summary)
-        log_message("Posted summary tweet.")
-        last_tweet_id = summary_tweet.id
-
-        # Post XDC transfer details as replies
-        for _, transfer in xdc_transfers.iterrows():
-            tx_hash = transfer['tx_hash']
-            value_xdc = transfer['value_xdc']
-            value_usd = transfer['value_usd']
-            token_symbol = transfer['token_symbol']
-            tweet = (
-                f"Large {token_symbol} Transfer\n"
-                f"Amount: {value_xdc:,.2f} {token_symbol} (${value_usd:,.2f})\n"
-                f"Tx: https://xdcscan.com/tx/{tx_hash}"
-            )
-            reply = api.update_status(tweet, in_reply_to_status_id=last_tweet_id)
-            last_tweet_id = reply.id
-            log_message(f"Posted XDC transfer: {tx_hash}")
-
-        # Post USDC.e transfer details as replies
-        for _, transfer in usdc_transfers.iterrows():
-            tx_hash = transfer['tx_hash']
-            value_usdc = transfer['value_usdc']
-            value_usd = transfer['value_usd']
-            token_symbol = transfer['token_symbol']
-            tweet = (
-                f"{token_symbol} Transfer\n"
-                f"Amount: {value_usdc:,.2f} {token_symbol} (${value_usd:,.2f})\n"
-                f"From: {transfer['from']}\n"
-                f"To: {transfer['to']}\n"
-                f"Tx: https://xdcscan.com/tx/{tx_hash}"
-            )
-            reply = api.update_status(tweet, in_reply_to_status_id=last_tweet_id)
-            last_tweet_id = reply.id
-            log_message(f"Posted USDC.e transfer: {tx_hash}")
 
     except Exception as e:
         log_message(f"Error posting to Twitter: {str(e)}")

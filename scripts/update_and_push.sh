@@ -25,10 +25,14 @@ large_transfers_pattern = "/root/xdc-intel-reports/data/large_transfers_*.csv"
 # Load latest large transfers file safely
 large_transfers_files = glob.glob(large_transfers_pattern)
 if large_transfers_files:
-    latest_transfers_file = max(large_transfers_files, key=os.path.getctime)
+    # Use modification time (mtime) for better accuracy
+    latest_transfers_file = max(large_transfers_files, key=os.path.getmtime)
     try:
         transfers_df = pd.read_csv(latest_transfers_file)
-    except pd.errors.EmptyDataError:
+        # Ensure DataFrame is not empty and has expected columns
+        if transfers_df.empty or 'timestamp' not in transfers_df.columns:
+            transfers_df = pd.DataFrame()
+    except (pd.errors.EmptyDataError, pd.errors.ParserError):
         transfers_df = pd.DataFrame()
 else:
     transfers_df = pd.DataFrame()
@@ -55,8 +59,7 @@ with open(readme_path, "r") as file:
 
 # Replace status fields (handle bold markdown and variable spacing)
 readme_content = re.sub(r"\|\s*\*\*Last Scan Time\*\*\s*\|\s*.*", f"| **Last Scan Time**    | {scan_time}                             |", readme_content)
-readme_content = re.sub(r"\|\s*\*\*Last Threat Detected\*\*\s*\|\s*.*", f"| **Last Large Transfer** | {last_large_transfer:<30} |", readme_content)
-# Remove the Last Smart Contract line if it exists
+readme_content = re.sub(r"\|\s*\*\*Last Large Transfer\*\*\s*\|\s*.*", f"| **Last Large Transfer** | {last_large_transfer:<30} |", readme_content)
 readme_content = re.sub(r"\|\s*\*\*Last Critical Movement\*\*\s*\|\s*.*\n?", "", readme_content)
 readme_content = re.sub(r"\|\s*\*\*Last Smart Contract\*\*\s*\|\s*.*\n?", "", readme_content)
 

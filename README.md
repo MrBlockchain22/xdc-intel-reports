@@ -12,8 +12,6 @@ Public, Intel  monitoring for the XDC Network.
 |-----------------------|---------------------------------------------------------------------|
 | **Last Scan Time**    | 2025-05-01 19:04:31 UTC (03:04 PM EST)                             |
 | **Last Large Transfer** | Detected (1 transfers ≥ $5,000) |
-| **Last Smart Contract** | None Detected                  |
-
 ---
 
 ## 🚨 Threat Monitoring Scope

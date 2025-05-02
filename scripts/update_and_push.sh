@@ -21,7 +21,6 @@ import os
 # Absolute Paths
 readme_path = "/root/xdc-intel-reports/README.md"
 large_transfers_pattern = "/root/xdc-intel-reports/data/large_transfers_*.csv"
-contracts_weekly_pattern = "/root/xdc-intel-reports/data/contracts_weekly_*.csv"
 
 # Load latest large transfers file safely
 large_transfers_files = glob.glob(large_transfers_pattern)
@@ -34,29 +33,11 @@ if large_transfers_files:
 else:
     transfers_df = pd.DataFrame()
 
-# Load latest contracts weekly file safely
-contracts_files = glob.glob(contracts_weekly_pattern)
-if contracts_files:
-    latest_contracts_file = max(contracts_files, key=os.path.getctime)
-    try:
-        contracts_df = pd.read_csv(latest_contracts_file)
-    except pd.errors.EmptyDataError:
-        contracts_df = pd.DataFrame()
-else:
-    contracts_df = pd.DataFrame()
-
 # Determine the most recent scan time
 latest_scan_time = None
 if large_transfers_files:
     transfers_mtime = os.path.getmtime(latest_transfers_file)
     latest_scan_time = datetime.utcfromtimestamp(transfers_mtime).replace(tzinfo=pytz.utc)
-if contracts_files:
-    contracts_mtime = os.path.getmtime(latest_contracts_file)
-    contracts_time = datetime.utcfromtimestamp(contracts_mtime).replace(tzinfo=pytz.utc)
-    if latest_scan_time:
-        latest_scan_time = max(latest_scan_time, contracts_time)
-    else:
-        latest_scan_time = contracts_time
 
 # Format the latest scan time
 if latest_scan_time:
@@ -67,7 +48,6 @@ else:
 
 # Prepare status values
 last_large_transfer = f"Detected ({len(transfers_df)} transfers ≥ $5,000)" if len(transfers_df) > 0 else "None Detected"
-last_smart_contract = f"Detected ({len(contracts_df)} contracts)" if len(transfers_df) > 0 else "None Detected"
 
 # Read README
 with open(readme_path, "r") as file:
@@ -76,7 +56,9 @@ with open(readme_path, "r") as file:
 # Replace status fields (handle bold markdown and variable spacing)
 readme_content = re.sub(r"\|\s*\*\*Last Scan Time\*\*\s*\|\s*.*", f"| **Last Scan Time**    | {scan_time}                             |", readme_content)
 readme_content = re.sub(r"\|\s*\*\*Last Threat Detected\*\*\s*\|\s*.*", f"| **Last Large Transfer** | {last_large_transfer:<30} |", readme_content)
-readme_content = re.sub(r"\|\s*\*\*Last Critical Movement\*\*\s*\|\s*.*", f"| **Last Smart Contract** | {last_smart_contract:<30} |", readme_content)
+# Remove the Last Smart Contract line if it exists
+readme_content = re.sub(r"\|\s*\*\*Last Critical Movement\*\*\s*\|\s*.*\n?", "", readme_content)
+readme_content = re.sub(r"\|\s*\*\*Last Smart Contract\*\*\s*\|\s*.*\n?", "", readme_content)
 
 # Write updated README
 with open(readme_path, "w") as file:
@@ -97,4 +79,5 @@ else
 fi
 
 # Post to X for large transfers
-python3 /root/xdc-intel-reports/scripts/post_to_x.py --type large_transfers
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Running post_to_x.py..." >> /root/xdc-intel/scan.log
+python3 /root/xdc-intel-reports/scripts/post_to_x.py >> /root/xdc-intel/scan.log 2>&1

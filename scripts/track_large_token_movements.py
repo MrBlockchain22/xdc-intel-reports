@@ -33,6 +33,7 @@ TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523
 LAST_BLOCK_FILE = os.path.join(os.path.expanduser("~"), "xdc-intel", "last_block.txt")
 BLOCKS_PER_HOUR = 1800  # XDC block time is ~2 seconds, so ~1800 blocks per hour
 BATCH_SIZE = 50  # Process 50 blocks at a time to avoid RPC overload
+PRICE_CACHE_DURATION = timedelta(minutes=10)  # Cache XDC price for 10 minutes
 
 # ERC-20 ABI for symbol and decimals
 ERC20_ABI = [
@@ -96,12 +97,19 @@ def get_logs(w3, filter_params):
 def call_contract(w3, contract, function_name):
     return getattr(contract.functions, function_name)().call()
 
-# Rate-limited function for CoinMarketCap API
+# Rate-limited function for CoinMarketCap API with caching
 @sleep_and_retry
 @limits(calls=CMC_RATE_LIMIT, period=60)
 def get_token_price(symbol, cached_prices):
+    # Check if price is cached and still valid
     if symbol in cached_prices:
-        return cached_prices[symbol]
+        price, timestamp = cached_prices[symbol]
+        if datetime.now() - timestamp < PRICE_CACHE_DURATION:
+            logging.info(f"Using cached {symbol} price: ${price}")
+            return price
+        else:
+            logging.info(f"Cached {symbol} price expired, fetching new price")
+
     headers = {"X-CMC_PRO_API_KEY": CMC_API_KEY, "Accept": "application/json"}
     params = {"symbol": symbol, "convert": "USD"}
     try:
@@ -109,12 +117,12 @@ def get_token_price(symbol, cached_prices):
         response.raise_for_status()
         data = response.json()
         price = data["data"][symbol]["quote"]["USD"]["price"]
-        cached_prices[symbol] = price
-        logging.info(f"{symbol} price: ${price}")
+        cached_prices[symbol] = (price, datetime.now())  # Store price and timestamp
+        logging.info(f"Fetched {symbol} price: ${price}")
         return price
     except Exception as e:
         logging.error(f"Failed to fetch {symbol} price: {str(e)}")
-        return cached_prices.get(symbol, 0)
+        return cached_prices.get(symbol, (0, datetime.now()))[0]  # Return last known price or 0
 
 # Get last processed block from file
 def get_last_block():
@@ -176,7 +184,7 @@ def process_transactions():
     if xdc_price == 0:
         logging.error("Cannot proceed without XDC price")
         return
-    cached_prices["XDC"] = xdc_price
+    cached_prices["XDC"] = (xdc_price, datetime.now())  # Store with timestamp
 
     large_transactions = []
     # Process blocks in batches to avoid RPC overload
@@ -269,23 +277,14 @@ def process_transactions():
         # Update the current start for the next batch
         current_start = batch_end + 1
 
-    # Save results to CSV
+    # Save results to CSV with temporary file
     if large_transactions:
         timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
         output_dir = os.path.join(os.path.expanduser("~"), "xdc-intel-reports", "data")
-        output_path = os.path.join(output_dir, f"large_transfers_{timestamp}.csv")
+        temp_path = os.path.join(output_dir, f"large_transfers_{timestamp}.csv.tmp")  # Temporary file
+        output_path = os.path.join(output_dir, f"large_transfers_{timestamp}.csv")   # Final file
         os.makedirs(output_dir, exist_ok=True)
-        with open(output_path, "w", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=[
-                "tx_hash", "from", "to", "value_xdc", "value_usd", "token_symbol",
-                "block_number", "timestamp"
-            ])
-            writer.writeheader()
-            writer.writerows(large_transactions)
-        logging.info(f"Saved {len(large_transactions)} transactions to {output_path}")
-
-    # Update last processed block
-    save_last_block(end_block)
-
-if __name__ == "__main__":
-    process_transactions()
+        
+        # Write to temporary file
+        with open(temp_path, "w", newline="") as f:
+            writer = csv.DictWriter(f,

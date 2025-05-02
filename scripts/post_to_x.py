@@ -7,6 +7,7 @@ import tweepy
 from dotenv import load_dotenv
 import logging
 import time
+import glob
 
 # Set up logging to scan.log
 logging.basicConfig(
@@ -59,16 +60,16 @@ def validate_tweet_length(text, max_length=TWEET_CHAR_LIMIT):
     return text
 
 def post_large_transfers(client, csv_dir="/root/xdc-intel-reports/data"):
-    # Find CSV files
-    csv_files = list(Path(csv_dir).glob("large_transfers_*.csv"))
+    # Find complete CSV files (exclude .tmp files)
+    csv_files = glob.glob(os.path.join(csv_dir, "large_transfers_*.csv"))
     if not csv_files:
-        msg = "[!] No large transfer CSV files found."
+        msg = "[!] No complete large transfer CSV files found."
         logging.info(msg)
         print(msg)
         return
 
     # Get the latest CSV
-    latest_csv = max(csv_files, key=lambda x: x.stat().st_mtime)
+    latest_csv = max(csv_files, key=os.path.getmtime)
     logging.info(f"Processing CSV: {latest_csv}")
 
     # Read and validate CSV
@@ -128,7 +129,7 @@ def post_large_transfers(client, csv_dir="/root/xdc-intel-reports/data"):
         print(msg)
         return
 
-    # Create the initial tweet with the first transfer's details
+    # Create the initial tweet with the first transfer's details, including XDCScan link
     initial_text = (
         f"💥 Big moves on #XDCNetwork! 🚀 @XDC_Network_ @XDCFoundation @xdc_community\n"
         f"🕒 {utc_time_str} ({est_time_str})\n"

@@ -12,12 +12,12 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv(dotenv_path=os.path.join(os.path.expanduser("~"), "xdc-intel", ".env"))
 
-# Configure logging to ~/xdc-intel/scan.log
+# Configure logging to ~/xdc-intel/large_transfers.log
 logging.basicConfig(
     level=logging.INFO,
     format='[%(levelname)s] %(asctime)s %(message)s',
     handlers=[
-        logging.FileHandler(os.path.join(os.path.expanduser("~"), "xdc-intel", "scan.log")),
+        logging.FileHandler(os.path.join(os.path.expanduser("~"), "xdc-intel", "large_transfers.log")),
         logging.StreamHandler()
     ]
 )
@@ -31,6 +31,8 @@ RPC_RATE_LIMIT = 3  # Lowered to be safer
 CMC_RATE_LIMIT = 30
 TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 LAST_BLOCK_FILE = os.path.join(os.path.expanduser("~"), "xdc-intel", "last_block.txt")
+BLOCKS_PER_HOUR = 1800  # XDC block time is ~2 seconds, so ~1800 blocks per hour
+BATCH_SIZE = 50  # Process 50 blocks at a time to avoid RPC overload
 
 # ERC-20 ABI for symbol and decimals
 ERC20_ABI = [
@@ -120,10 +122,11 @@ def get_last_block():
         with open(LAST_BLOCK_FILE, "r") as f:
             return int(f.read().strip())
     except FileNotFoundError:
-        return 88130700  # Fallback to a recent block
+        logging.warning(f"{LAST_BLOCK_FILE} not found, starting from current block minus {BLOCKS_PER_HOUR}")
+        return None  # We'll calculate the starting block dynamically
     except Exception as e:
         logging.error(f"Error reading last block: {e}")
-        return 88130700
+        return None
 
 # Save last processed block to file
 def save_last_block(block_number):
@@ -144,12 +147,28 @@ def process_transactions():
         return
 
     # Get last processed block
-    start_block = get_last_block()
-    end_block = min(current_block, start_block + 50)  # Process 50 blocks at a time
-    if start_block >= current_block:
+    last_processed_block = get_last_block()
+
+    # Calculate the block range for the last hour
+    if last_processed_block is None:
+        # If no last block, start from (current_block - BLOCKS_PER_HOUR)
+        start_block = max(current_block - BLOCKS_PER_HOUR, 0)
+    else:
+        # Start from the last processed block
+        start_block = last_processed_block + 1
+
+    # End at the current block
+    end_block = current_block
+
+    if start_block >= end_block:
         logging.info("No new blocks to process")
         return
-    logging.info(f"Scanning blocks {start_block + 1} to {end_block}...")
+
+    # Adjust start_block to cover approximately the last hour if needed
+    if end_block - start_block > BLOCKS_PER_HOUR:
+        start_block = end_block - BLOCKS_PER_HOUR
+
+    logging.info(f"Scanning blocks {start_block} to {end_block}...")
 
     # Cache for token prices
     cached_prices = {}
@@ -160,86 +179,95 @@ def process_transactions():
     cached_prices["XDC"] = xdc_price
 
     large_transactions = []
-    for block_number in range(start_block + 1, end_block + 1):
-        block = with_rpc_failover(web3_instances, get_block_transactions, block_number)
-        if not block or "transactions" not in block:
-            logging.warning(f"Skipping block {block_number}: no data")
-            continue
-
-        logging.info(f"Fetched block {block_number} with {len(block['transactions'])} transactions")
-
-        # Process native XDC transactions
-        for tx in block["transactions"]:
-            if tx.get("value", 0) > 0:
-                value_xdc = w3.from_wei(tx["value"], "ether")
-                value_usd = float(value_xdc) * xdc_price
-                if value_usd >= MIN_USD_VALUE:
-                    tx_hash = tx["hash"].hex()
-                    tx_data = {
-                        "tx_hash": tx_hash,
-                        "from": tx["from"],
-                        "to": tx["to"],
-                        "value_xdc": float(value_xdc),
-                        "value_usd": value_usd,
-                        "token_symbol": "XDC",
-                        "block_number": block_number,
-                        "timestamp": datetime.utcfromtimestamp(block["timestamp"]).strftime("%Y-%m-%d %H:%M:%S")
-                    }
-                    large_transactions.append(tx_data)
-                    logging.info(f"Found large XDC tx: {tx_hash} - ${value_usd:.2f}")
-
-        # Process ERC-20 token transfers
-        filter_params = {
-            "fromBlock": block_number,
-            "toBlock": block_number,
-            "topics": [TRANSFER_TOPIC]
-        }
-        logs = with_rpc_failover(web3_instances, get_logs, filter_params)
-        if logs is None:
-            logging.warning(f"Skipping ERC-20 logs for block {block_number}: failed to fetch")
-            continue
-
-        for log in logs:
-            token_address = log["address"]
-            if len(log["topics"]) != 3:
+    # Process blocks in batches to avoid RPC overload
+    current_start = start_block
+    while current_start <= end_block:
+        batch_end = min(current_start + BATCH_SIZE - 1, end_block)
+        logging.info(f"Processing batch: blocks {current_start} to {batch_end}...")
+        
+        for block_number in range(current_start, batch_end + 1):
+            block = with_rpc_failover(web3_instances, get_block_transactions, block_number)
+            if not block or "transactions" not in block:
+                logging.warning(f"Skipping block {block_number}: no data")
                 continue
-            try:
-                # Get token details
-                contract = w3.eth.contract(address=token_address, abi=ERC20_ABI)
-                token_symbol = with_rpc_failover(web3_instances, call_contract, contract, "symbol")
-                if not token_symbol:
-                    token_symbol = "UNKNOWN"
-                decimals = with_rpc_failover(web3_instances, call_contract, contract, "decimals")
-                if not decimals:
-                    decimals = 18  # Fallback to 18 decimals
 
-                # Process transfer
-                data_hex = log["data"].hex()[2:] if isinstance(log["data"], bytes) else log["data"][2:]
-                if not data_hex or not all(c in '0123456789abcdefABCDEF' for c in data_hex):
-                    logging.warning(f"Invalid ERC-20 log data in block {block_number}: {data_hex}")
+            logging.info(f"Fetched block {block_number} with {len(block['transactions'])} transactions")
+
+            # Process native XDC transactions
+            for tx in block["transactions"]:
+                if tx.get("value", 0) > 0:
+                    value_xdc = w3.from_wei(tx["value"], "ether")
+                    value_usd = float(value_xdc) * xdc_price
+                    if value_usd >= MIN_USD_VALUE:
+                        tx_hash = tx["hash"].hex()
+                        tx_data = {
+                            "tx_hash": tx_hash,
+                            "from": tx["from"],
+                            "to": tx["to"],
+                            "value_xdc": float(value_xdc),
+                            "value_usd": value_usd,
+                            "token_symbol": "XDC",
+                            "block_number": block_number,
+                            "timestamp": datetime.utcfromtimestamp(block["timestamp"]).strftime("%Y-%m-%d %H:%M:%S")
+                        }
+                        large_transactions.append(tx_data)
+                        logging.info(f"Found large XDC tx: {tx_hash} - ${value_usd:.2f}")
+
+            # Process ERC-20 token transfers
+            filter_params = {
+                "fromBlock": block_number,
+                "toBlock": block_number,
+                "topics": [TRANSFER_TOPIC]
+            }
+            logs = with_rpc_failover(web3_instances, get_logs, filter_params)
+            if logs is None:
+                logging.warning(f"Skipping ERC-20 logs for block {block_number}: failed to fetch")
+                continue
+
+            for log in logs:
+                token_address = log["address"]
+                if len(log["topics"]) != 3:
                     continue
-                value = int(data_hex, 16) / (10 ** decimals)
-                token_price = get_token_price(token_symbol, cached_prices)
-                value_usd = value * token_price
-                if value_usd >= MIN_USD_VALUE:
-                    from_address = w3.to_checksum_address(f"0x{log['topics'][1][-40:]}")
-                    to_address = w3.to_checksum_address(f"0x{log['topics'][2][-40:]}")
-                    tx_hash = log["transactionHash"].hex()
-                    tx_data = {
-                        "tx_hash": tx_hash,
-                        "from": from_address,
-                        "to": to_address,
-                        "value_xdc": value,
-                        "value_usd": value_usd,
-                        "token_symbol": token_symbol,
-                        "block_number": block_number,
-                        "timestamp": datetime.utcfromtimestamp(block["timestamp"]).strftime("%Y-%m-%d %H:%M:%S")
-                    }
-                    large_transactions.append(tx_data)
-                    logging.info(f"Found large ERC-20 tx: {tx_data['tx_hash']} - ${value_usd:.2f}")
-            except Exception as e:
-                logging.warning(f"Failed to process ERC-20 log in block {block_number} for token {token_address}: {str(e)}")
-                continue
+                try:
+                    # Get token details
+                    contract = w3.eth.contract(address=token_address, abi=ERC20_ABI)
+                    token_symbol = with_rpc_failover(web3_instances, call_contract, contract, "symbol")
+                    if not token_symbol:
+                        token_symbol = "UNKNOWN"
+                    decimals = with_rpc_failover(web3_instances, call_contract, contract, "decimals")
+                    if not decimals:
+                        decimals = 18  # Fallback to 18 decimals
+
+                    # Process transfer
+                    data_hex = log["data"].hex()[2:] if isinstance(log["data"], bytes) else log["data"][2:]
+                    if not data_hex or not all(c in '0123456789abcdefABCDEF' for c in data_hex):
+                        logging.warning(f"Invalid ERC-20 log data in block {block_number}: {data_hex}")
+                        continue
+                    value = int(data_hex, 16) / (10 ** decimals)
+                    token_price = get_token_price(token_symbol, cached_prices)
+                    value_usd = value * token_price
+                    if value_usd >= MIN_USD_VALUE:
+                        from_address = w3.to_checksum_address(f"0x{log['topics'][1][-40:]}")
+                        to_address = w3.to_checksum_address(f"0x{log['topics'][2][-40:]}")
+                        tx_hash = log["transactionHash"].hex()
+                        tx_data = {
+                            "tx_hash": tx_hash,
+                            "from": from_address,
+                            "to": to_address,
+                            "value_xdc": value,
+                            "value_usd": value_usd,
+                            "token_symbol": token_symbol,
+                            "block_number": block_number,
+                            "timestamp": datetime.utcfromtimestamp(block["timestamp"]).strftime("%Y-%m-%d %H:%M:%S")
+                        }
+                        large_transactions.append(tx_data)
+                        logging.info(f"Found large ERC-20 tx: {tx_data['tx_hash']} - ${value_usd:.2f}")
+                except Exception as e:
+                    logging.warning(f"Failed to process ERC-20 log in block {block_number} for token {token_address}: {str(e)}")
+                    continue
+
+        # Update the current start for the next batch
+        current_start = batch_end + 1
 
     # Save results to CSV
     if large_transactions:

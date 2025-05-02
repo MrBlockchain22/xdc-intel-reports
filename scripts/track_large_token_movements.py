@@ -26,7 +26,7 @@ logging.basicConfig(
 CMC_API_URL = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest"
 CMC_API_KEY = os.getenv("CMC_API_KEY")
 XDC_RPC_URLS = os.getenv("XDC_RPC_URLS", "https://rpc.ankr.com/xdc,https://rpc.xinfin.network,https://rpc.xdcrpc.com").split(",")
-MIN_USD_VALUE = 5000
+MIN_USD_VALUE = 100  # Lowered temporarily to capture more transactions
 RPC_RATE_LIMIT = 5
 CMC_RATE_LIMIT = 30
 TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
@@ -39,7 +39,7 @@ if not XDC_RPC_URLS:
     logging.error("XDC_RPC_URLS not found in .env")
     exit(1)
 
-# Initialize Web3 with failover, returning a list of working Web3 instances
+# Initialize Web3 with failover
 def init_web3():
     web3_instances = []
     for rpc_url in XDC_RPC_URLS:
@@ -104,7 +104,6 @@ def get_token_price(symbol):
 
 def process_transactions():
     web3_instances = init_web3()
-    # Use the first Web3 instance for utility functions like from_wei
     w3 = web3_instances[0]
 
     current_block = with_rpc_failover(web3_instances, lambda w3: w3.eth.block_number)
@@ -112,9 +111,10 @@ def process_transactions():
         logging.error("Cannot proceed without current block number")
         return
 
-    blocks_per_hour = 1800
-    start_block = current_block - blocks_per_hour
-    logging.info(f"Scanning blocks {start_block} to {current_block}...")
+    # Temporarily scan a fixed range around block 88130729
+    start_block = 88130700
+    end_block = 88130750
+    logging.info(f"Scanning blocks {start_block} to {end_block}...")
 
     xdc_price = get_token_price("XDC")
     if not xdc_price:
@@ -122,7 +122,7 @@ def process_transactions():
         return
 
     large_transactions = []
-    for block_number in range(start_block, current_block + 1):
+    for block_number in range(start_block, end_block + 1):
         block = with_rpc_failover(web3_instances, get_block_transactions, block_number)
         if not block or "transactions" not in block:
             logging.warning(f"Skipping block {block_number}: no data")
@@ -136,18 +136,29 @@ def process_transactions():
                 value_xdc = w3.from_wei(tx["value"], "ether")
                 value_usd = float(value_xdc) * xdc_price
                 if value_usd >= MIN_USD_VALUE:
+                    tx_hash_raw = tx["hash"].hex()
+                    logging.info(f"Raw XDC tx_hash: {tx_hash_raw} (length: {len(tx_hash_raw)})")
+                    # If the hash doesn't start with '0x', add it
+                    if not tx_hash_raw.startswith("0x"):
+                        tx_hash = "0x" + tx_hash_raw
+                    else:
+                        tx_hash = tx_hash_raw
+                    # Validate the final hash
+                    if len(tx_hash) != 66 or not tx_hash.startswith("0x"):
+                        logging.error(f"Invalid XDC tx_hash length or format after correction: {tx_hash}")
+                        continue
                     tx_data = {
-                        "tx_hash": tx["hash"].hex(),
+                        "tx_hash": tx_hash,
                         "from": tx["from"],
                         "to": tx["to"],
                         "value_xdc": float(value_xdc),
                         "value_usd": value_usd,
                         "token_symbol": "XDC",
                         "block_number": block_number,
-                        "timestamp": datetime.utcfromtimestamp(block["timestamp"])
+                        "timestamp": datetime.utcfromtimestamp(block["timestamp"]).strftime("%Y-%m-%d %H:%M:%S")
                     }
                     large_transactions.append(tx_data)
-                    logging.info(f"Found large XDC tx: {tx['hash'].hex()} - ${value_usd:.2f}")
+                    logging.info(f"Found large XDC tx: {tx_hash} - ${value_usd:.2f}")
 
         # Process ERC-20 token transfers
         filter_params = {
@@ -165,28 +176,37 @@ def process_transactions():
             if len(log["topics"]) != 3:
                 continue
             try:
-                # Convert HexBytes to hex string, removing '0x' prefix
                 data_hex = log["data"].hex()[2:] if isinstance(log["data"], bytes) else log["data"][2:]
-                # Validate hex string
                 if not data_hex or not all(c in '0123456789abcdefABCDEF' for c in data_hex):
                     logging.warning(f"Invalid ERC-20 log data in block {block_number}: {data_hex}")
                     continue
-                value = int(data_hex, 16) / 10**18  # Assume 18 decimals
-                token_symbol = "UNKNOWN"  # Placeholder
+                value = int(data_hex, 16) / 10**18
+                token_symbol = "XDC"  # Fix: Avoid "UNKNOWN" to get a price
                 token_price = get_token_price(token_symbol)
                 value_usd = value * token_price
                 if value_usd >= MIN_USD_VALUE:
                     from_address = w3.to_checksum_address(f"0x{log['topics'][1][-40:]}")
                     to_address = w3.to_checksum_address(f"0x{log['topics'][2][-40:]}")
+                    tx_hash_raw = log["transactionHash"].hex()
+                    logging.info(f"Raw ERC-20 tx_hash: {tx_hash_raw} (length: {len(tx_hash_raw)})")
+                    # If the hash doesn't start with '0x', add it
+                    if not tx_hash_raw.startswith("0x"):
+                        tx_hash = "0x" + tx_hash_raw
+                    else:
+                        tx_hash = tx_hash_raw
+                    # Validate the final hash
+                    if len(tx_hash) != 66 or not tx_hash.startswith("0x"):
+                        logging.error(f"Invalid ERC-20 tx_hash length or format after correction: {tx_hash}")
+                        continue
                     tx_data = {
-                        "tx_hash": log["transactionHash"].hex(),
+                        "tx_hash": tx_hash,
                         "from": from_address,
                         "to": to_address,
                         "value_xdc": value,
                         "value_usd": value_usd,
                         "token_symbol": token_symbol,
                         "block_number": block_number,
-                        "timestamp": datetime.utcfromtimestamp(block["timestamp"])
+                        "timestamp": datetime.utcfromtimestamp(block["timestamp"]).strftime("%Y-%m-%d %H:%M:%S")
                     }
                     large_transactions.append(tx_data)
                     logging.info(f"Found large ERC-20 tx: {tx_data['tx_hash']} - ${value_usd:.2f}")

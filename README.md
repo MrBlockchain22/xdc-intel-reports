@@ -2,7 +2,7 @@
 
 ![Last Commit](https://img.shields.io/github/last-commit/MrBlockchain22/xdc-intel-reports?logo=github&logoColor=white&color=4caf50&label=Last%20Update)
 
-Public, real-time threat monitoring for the XDC Network.
+Public, Intel  monitoring for the XDC Network.
 
 ---
 
@@ -18,9 +18,9 @@ Public, real-time threat monitoring for the XDC Network.
 
 ## 🚨 Threat Monitoring Scope
 
-- Scanning for malicious contract interactions
+- Scanning for malicious contract interactions (Pending)
+- Oversight of XDC Network high volume transactions
 - Oversight of Circle’s USDC bridge high volume transactions
-- Monitoring large movements affecting XDC infrastructure (Pending)
 - Public reporting of suspicious activity (via GitHub Issues)
 
 ---

@@ -27,7 +27,6 @@ client = tweepy.Client(
     access_token_secret=ACCESS_TOKEN_SECRET
 )
 
-# Rest of the script
 def get_est_time(utc_time):
     est_tz = pytz.timezone('US/Eastern')
     return utc_time.astimezone(est_tz)
@@ -75,45 +74,5 @@ def post_large_transfers(client, csv_dir="/root/xdc-intel-reports/data"):
         )
         client.create_tweet(text=detail_text, in_reply_to_tweet_id=initial_tweet.data["id"])
 
-def post_contracts_weekly(client, csv_dir="/root/xdc-intel-reports/data"):
-    csv_files = list(Path(csv_dir).glob("contracts_weekly_*.csv"))
-    if not csv_files:
-        print("[!] No contracts weekly CSV files found.")
-        return
-
-    latest_csv = max(csv_files, key=lambda x: x.stat().st_mtime)
-    df = pd.read_csv(latest_csv)
-
-    if df.empty:
-        print("[✓] No smart contracts found in the past 7 days. Skipping post to avoid noise.")
-        return
-
-    total_count = len(df)
-    verified_count = len(df[df["isVerified"] == True])
-    unverified_count = total_count - verified_count
-
-    utc_now = datetime.now(pytz.utc)
-    est_now = get_est_time(utc_now)
-    utc_time_str = utc_now.strftime("%d %b %Y, %H:%M UTC")
-    est_time_str = est_now.strftime("%I:%M %p EST")
-
-    contract_word = "contract" if total_count == 1 else "contracts"
-    summary_text = (
-        f"🎉 Exciting week on #XDCNetwork! 🌐 @XDC_Network_ @XDCFoundation @xdc_community\n"
-        f"🚀 {total_count} new smart {contract_word} launched in the past 7 days! 📜\n"
-        f"✅ Verified: {verified_count} | 🔍 Unverified: {unverified_count}\n"
-        f"🕒 {utc_time_str} ({est_time_str})\n"
-        f"📊 Details: https://github.com/MrBlockchain22/xdc-intel-reports #XDC"
-    )
-    client.create_tweet(text=summary_text)
-
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description="Post XDC Network updates to X.")
-    parser.add_argument("--type", choices=["large_transfers", "contracts_weekly"], required=True, help="Type of update to post")
-    args = parser.parse_args()
-
-    if args.type == "large_transfers":
-        post_large_transfers(client)
-    elif args.type == "contracts_weekly":
-        post_contracts_weekly(client)
+    post_large_transfers(client)

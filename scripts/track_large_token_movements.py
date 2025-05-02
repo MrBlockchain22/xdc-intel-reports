@@ -9,7 +9,7 @@ import csv
 from ratelimit import limits, sleep_and_retry
 from dotenv import load_dotenv
 
-# Load environment variables from ~/xdc-intel/.env
+# Load environment variables
 load_dotenv(dotenv_path=os.path.join(os.path.expanduser("~"), "xdc-intel", ".env"))
 
 # Configure logging to ~/xdc-intel/scan.log
@@ -26,10 +26,17 @@ logging.basicConfig(
 CMC_API_URL = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest"
 CMC_API_KEY = os.getenv("CMC_API_KEY")
 XDC_RPC_URLS = os.getenv("XDC_RPC_URLS", "https://rpc.ankr.com/xdc,https://rpc.xinfin.network,https://rpc.xdcrpc.com").split(",")
-MIN_USD_VALUE = 100  # Lowered temporarily to capture more transactions
-RPC_RATE_LIMIT = 5
+MIN_USD_VALUE = 5000  # Match post_to_x.py threshold
+RPC_RATE_LIMIT = 3  # Lowered to be safer
 CMC_RATE_LIMIT = 30
 TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+LAST_BLOCK_FILE = os.path.join(os.path.expanduser("~"), "xdc-intel", "last_block.txt")
+
+# ERC-20 ABI for symbol and decimals
+ERC20_ABI = [
+    {"constant": True, "inputs": [], "name": "symbol", "outputs": [{"name": "", "type": "string"}], "type": "function"},
+    {"constant": True, "inputs": [], "name": "decimals", "outputs": [{"name": "", "type": "uint8"}], "type": "function"}
+]
 
 # Validate API keys
 if not CMC_API_KEY:
@@ -71,24 +78,28 @@ def with_rpc_failover(web3_instances, func, *args, retries=3, delay=2):
     logging.error(f"Failed to execute {func.__name__} after {retries} attempts")
     return None
 
-# Rate-limited function for RPC block fetching
+# Rate-limited RPC calls
 @sleep_and_retry
 @limits(calls=RPC_RATE_LIMIT, period=1)
 def get_block_transactions(w3, block_number):
     return w3.eth.get_block(block_number, full_transactions=True)
 
-# Rate-limited function for RPC log fetching
 @sleep_and_retry
 @limits(calls=RPC_RATE_LIMIT, period=1)
 def get_logs(w3, filter_params):
     return w3.eth.get_logs(filter_params)
 
+@sleep_and_retry
+@limits(calls=RPC_RATE_LIMIT, period=1)
+def call_contract(w3, contract, function_name):
+    return getattr(contract.functions, function_name)().call()
+
 # Rate-limited function for CoinMarketCap API
 @sleep_and_retry
 @limits(calls=CMC_RATE_LIMIT, period=60)
-def get_token_price(symbol):
-    if symbol == "UNKNOWN":
-        return 0
+def get_token_price(symbol, cached_prices):
+    if symbol in cached_prices:
+        return cached_prices[symbol]
     headers = {"X-CMC_PRO_API_KEY": CMC_API_KEY, "Accept": "application/json"}
     params = {"symbol": symbol, "convert": "USD"}
     try:
@@ -96,33 +107,60 @@ def get_token_price(symbol):
         response.raise_for_status()
         data = response.json()
         price = data["data"][symbol]["quote"]["USD"]["price"]
+        cached_prices[symbol] = price
         logging.info(f"{symbol} price: ${price}")
         return price
     except Exception as e:
         logging.error(f"Failed to fetch {symbol} price: {str(e)}")
-        return 0
+        return cached_prices.get(symbol, 0)
+
+# Get last processed block from file
+def get_last_block():
+    try:
+        with open(LAST_BLOCK_FILE, "r") as f:
+            return int(f.read().strip())
+    except FileNotFoundError:
+        return 88130700  # Fallback to a recent block
+    except Exception as e:
+        logging.error(f"Error reading last block: {e}")
+        return 88130700
+
+# Save last processed block to file
+def save_last_block(block_number):
+    try:
+        with open(LAST_BLOCK_FILE, "w") as f:
+            f.write(str(block_number))
+    except Exception as e:
+        logging.error(f"Error saving last block: {e}")
 
 def process_transactions():
     web3_instances = init_web3()
     w3 = web3_instances[0]
 
+    # Get current block
     current_block = with_rpc_failover(web3_instances, lambda w3: w3.eth.block_number)
     if current_block is None:
         logging.error("Cannot proceed without current block number")
         return
 
-    # Temporarily scan a fixed range around block 88130729
-    start_block = 88130700
-    end_block = 88130750
-    logging.info(f"Scanning blocks {start_block} to {end_block}...")
+    # Get last processed block
+    start_block = get_last_block()
+    end_block = min(current_block, start_block + 50)  # Process 50 blocks at a time
+    if start_block >= current_block:
+        logging.info("No new blocks to process")
+        return
+    logging.info(f"Scanning blocks {start_block + 1} to {end_block}...")
 
-    xdc_price = get_token_price("XDC")
-    if not xdc_price:
+    # Cache for token prices
+    cached_prices = {}
+    xdc_price = get_token_price("XDC", cached_prices)
+    if xdc_price == 0:
         logging.error("Cannot proceed without XDC price")
         return
+    cached_prices["XDC"] = xdc_price
 
     large_transactions = []
-    for block_number in range(start_block, end_block + 1):
+    for block_number in range(start_block + 1, end_block + 1):
         block = with_rpc_failover(web3_instances, get_block_transactions, block_number)
         if not block or "transactions" not in block:
             logging.warning(f"Skipping block {block_number}: no data")
@@ -136,17 +174,7 @@ def process_transactions():
                 value_xdc = w3.from_wei(tx["value"], "ether")
                 value_usd = float(value_xdc) * xdc_price
                 if value_usd >= MIN_USD_VALUE:
-                    tx_hash_raw = tx["hash"].hex()
-                    logging.info(f"Raw XDC tx_hash: {tx_hash_raw} (length: {len(tx_hash_raw)})")
-                    # If the hash doesn't start with '0x', add it
-                    if not tx_hash_raw.startswith("0x"):
-                        tx_hash = "0x" + tx_hash_raw
-                    else:
-                        tx_hash = tx_hash_raw
-                    # Validate the final hash
-                    if len(tx_hash) != 66 or not tx_hash.startswith("0x"):
-                        logging.error(f"Invalid XDC tx_hash length or format after correction: {tx_hash}")
-                        continue
+                    tx_hash = tx["hash"].hex()
                     tx_data = {
                         "tx_hash": tx_hash,
                         "from": tx["from"],
@@ -176,28 +204,27 @@ def process_transactions():
             if len(log["topics"]) != 3:
                 continue
             try:
+                # Get token details
+                contract = w3.eth.contract(address=token_address, abi=ERC20_ABI)
+                token_symbol = with_rpc_failover(web3_instances, call_contract, contract, "symbol")
+                if not token_symbol:
+                    token_symbol = "UNKNOWN"
+                decimals = with_rpc_failover(web3_instances, call_contract, contract, "decimals")
+                if not decimals:
+                    decimals = 18  # Fallback to 18 decimals
+
+                # Process transfer
                 data_hex = log["data"].hex()[2:] if isinstance(log["data"], bytes) else log["data"][2:]
                 if not data_hex or not all(c in '0123456789abcdefABCDEF' for c in data_hex):
                     logging.warning(f"Invalid ERC-20 log data in block {block_number}: {data_hex}")
                     continue
-                value = int(data_hex, 16) / 10**18
-                token_symbol = "XDC"  # Fix: Avoid "UNKNOWN" to get a price
-                token_price = get_token_price(token_symbol)
+                value = int(data_hex, 16) / (10 ** decimals)
+                token_price = get_token_price(token_symbol, cached_prices)
                 value_usd = value * token_price
                 if value_usd >= MIN_USD_VALUE:
                     from_address = w3.to_checksum_address(f"0x{log['topics'][1][-40:]}")
                     to_address = w3.to_checksum_address(f"0x{log['topics'][2][-40:]}")
-                    tx_hash_raw = log["transactionHash"].hex()
-                    logging.info(f"Raw ERC-20 tx_hash: {tx_hash_raw} (length: {len(tx_hash_raw)})")
-                    # If the hash doesn't start with '0x', add it
-                    if not tx_hash_raw.startswith("0x"):
-                        tx_hash = "0x" + tx_hash_raw
-                    else:
-                        tx_hash = tx_hash_raw
-                    # Validate the final hash
-                    if len(tx_hash) != 66 or not tx_hash.startswith("0x"):
-                        logging.error(f"Invalid ERC-20 tx_hash length or format after correction: {tx_hash}")
-                        continue
+                    tx_hash = log["transactionHash"].hex()
                     tx_data = {
                         "tx_hash": tx_hash,
                         "from": from_address,
@@ -214,19 +241,23 @@ def process_transactions():
                 logging.warning(f"Failed to process ERC-20 log in block {block_number} for token {token_address}: {str(e)}")
                 continue
 
-    # Save results to ~/xdc-intel-reports/data/large_transfers_<timestamp>.csv
-    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    output_dir = os.path.join(os.path.expanduser("~"), "xdc-intel-reports", "data")
-    output_path = os.path.join(output_dir, f"large_transfers_{timestamp}.csv")
-    os.makedirs(output_dir, exist_ok=True)
-    with open(output_path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=[
-            "tx_hash", "from", "to", "value_xdc", "value_usd", "token_symbol",
-            "block_number", "timestamp"
-        ])
-        writer.writeheader()
-        writer.writerows(large_transactions)
-    logging.info(f"Saved {len(large_transactions)} transactions to {output_path}")
+    # Save results to CSV
+    if large_transactions:
+        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        output_dir = os.path.join(os.path.expanduser("~"), "xdc-intel-reports", "data")
+        output_path = os.path.join(output_dir, f"large_transfers_{timestamp}.csv")
+        os.makedirs(output_dir, exist_ok=True)
+        with open(output_path, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=[
+                "tx_hash", "from", "to", "value_xdc", "value_usd", "token_symbol",
+                "block_number", "timestamp"
+            ])
+            writer.writeheader()
+            writer.writerows(large_transactions)
+        logging.info(f"Saved {len(large_transactions)} transactions to {output_path}")
+
+    # Update last processed block
+    save_last_block(end_block)
 
 if __name__ == "__main__":
     process_transactions()

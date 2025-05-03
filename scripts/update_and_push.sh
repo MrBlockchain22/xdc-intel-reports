@@ -78,16 +78,20 @@ with open(readme_path, "r") as file:
 # Replace status fields (handle bold markdown and variable spacing)
 readme_content = re.sub(r"\|\s*\*\*Last Scan Time\*\*\s*\|\s*.*", f"| **Last Scan Time**    | {scan_time}                             |", readme_content)
 readme_content = re.sub(r"\|\s*\*\*Last Large Transfer\*\*\s*\|\s*.*", f"| **Last Large Transfer** | {last_large_transfer:<30} |", readme_content)
-# Add USDC.e metrics if not present
+
+# Add or update Last USDC.e Transfer
 if "**Last USDC.e Transfer**" not in readme_content:
     readme_content = readme_content.replace(
         "| **Last Large Transfer** |",
-        "| **Last Large Transfer** |\n| **Last USDC.e Transfer** | {last_usdc_transfer:<30} |\n| **USDC.e Bridge Balance** | {bridge_balance:<30} |"
+        "| **Last Large Transfer** |\n| **Last USDC.e Transfer** | {last_usdc_transfer:<30} |"
     )
 else:
     readme_content = re.sub(r"\|\s*\*\*Last USDC.e Transfer\*\*\s*\|\s*.*", f"| **Last USDC.e Transfer** | {last_usdc_transfer:<30} |", readme_content)
-    readme_content = re.sub(r"\|\s*\*\*USDC.e Bridge Balance\*\*\s*\|\s*.*", f"| **USDC.e Bridge Balance** | {bridge_balance:<30} |", readme_content)
 
+# Remove USDC.e Bridge Balance if it exists
+readme_content = re.sub(r"\|\s*\*\*USDC.e Bridge Balance\*\*\s*\|\s*.*\n?", "", readme_content)
+
+# Remove other outdated fields
 readme_content = re.sub(r"\|\s*\*\*Last Critical Movement\*\*\s*\|\s*.*\n?", "", readme_content)
 readme_content = re.sub(r"\|\s*\*\*Last Smart Contract\*\*\s*\|\s*.*\n?", "", readme_content)
 

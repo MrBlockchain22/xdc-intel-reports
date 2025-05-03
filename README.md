@@ -12,9 +12,7 @@ Public, Intel  monitoring for the XDC Network.
 |-----------------------|---------------------------------------------------------------------|
 | **Last Scan Time**    | 2025-05-02 19:53:30 UTC (03:53 PM EST)                             |
 | **Last Large Transfer** |
-| **Last USDC.e Transfer** | {last_usdc_transfer:<30} |
-| **USDC.e Bridge Balance** | {bridge_balance:<30} | Detected (3 transfers ≥ $5,000) |
-| **USDC.e Bridge Balance** | {bridge_balance:<30} | Detected (3 transfers ≥ $5,000) |
+| **Last USDC.e Transfer** | {last_usdc_transfer:<30} | Detected (3 transfers ≥ $5,000) |
 ---
 
 ## 🚨 Threat Monitoring Scope

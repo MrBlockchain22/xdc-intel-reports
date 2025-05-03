@@ -49,7 +49,7 @@ if usdc_transfers_files:
 else:
     usdc_transfers_df = pd.DataFrame()
 
-# Determine the most recent scan time
+# Determine the most recent scan time (for Last Scan Time)
 latest_scan_time = None
 if large_transfers_files or usdc_transfers_files:
     latest_file = max(
@@ -67,9 +67,21 @@ if latest_scan_time:
 else:
     scan_time = "Not Available"
 
-# Prepare status values
-last_large_transfer = f"Detected ({len(transfers_df)} transfers ≥ $5,000)" if len(transfers_df) > 0 else "None Detected"
-last_usdc_transfer = f"Detected ({len(usdc_transfers_df)} transfers ≥ $5,000)" if len(usdc_transfers_df) > 0 else "None Detected"
+# Determine the timestamp of the last large transfer scan
+last_large_transfer_time = "Not Available"
+if large_transfers_files:
+    large_transfers_mtime = os.path.getmtime(latest_transfers_file)
+    large_transfers_time = datetime.utcfromtimestamp(large_transfers_mtime).replace(tzinfo=pytz.utc)
+    est_large_time = large_transfers_time.astimezone(pytz.timezone('US/Eastern'))
+    last_large_transfer_time = large_transfers_time.strftime("%Y-%m-%d %H:%M:%S UTC") + f" ({est_large_time.strftime('%I:%M %p EST')})"
+
+# Determine the timestamp of the last USDC.e transfer scan
+last_usdc_transfer_time = "Not Available"
+if usdc_transfers_files:
+    usdc_transfers_mtime = os.path.getmtime(latest_usdc_file)
+    usdc_transfers_time = datetime.utcfromtimestamp(usdc_transfers_mtime).replace(tzinfo=pytz.utc)
+    est_usdc_time = usdc_transfers_time.astimezone(pytz.timezone('US/Eastern'))
+    last_usdc_transfer_time = usdc_transfers_time.strftime("%Y-%m-%d %H:%M:%S UTC") + f" ({est_usdc_time.strftime('%I:%M %p EST')})"
 
 # Read README
 with open(readme_path, "r") as file:
@@ -77,16 +89,16 @@ with open(readme_path, "r") as file:
 
 # Replace status fields (handle bold markdown and variable spacing)
 readme_content = re.sub(r"\|\s*\*\*Last Scan Time\*\*\s*\|\s*.*", f"| **Last Scan Time**    | {scan_time}                             |", readme_content)
-readme_content = re.sub(r"\|\s*\*\*Last Large Transfer\*\*\s*\|\s*.*", f"| **Last Large Transfer** | {last_large_transfer:<30} |", readme_content)
+readme_content = re.sub(r"\|\s*\*\*Last Large Transfer\*\*\s*\|\s*.*", f"| **Last Large Transfer** | {last_large_transfer_time:<30} |", readme_content)
 
 # Add or update Last USDC.e Transfer
 if "**Last USDC.e Transfer**" not in readme_content:
     readme_content = readme_content.replace(
         "| **Last Large Transfer** |",
-        "| **Last Large Transfer** |\n| **Last USDC.e Transfer** | {last_usdc_transfer:<30} |"
+        "| **Last Large Transfer** |\n| **Last USDC.e Transfer** | {last_usdc_transfer_time:<30} |"
     )
 else:
-    readme_content = re.sub(r"\|\s*\*\*Last USDC.e Transfer\*\*\s*\|\s*.*", f"| **Last USDC.e Transfer** | {last_usdc_transfer:<30} |", readme_content)
+    readme_content = re.sub(r"\|\s*\*\*Last USDC.e Transfer\*\*\s*\|\s*.*", f"| **Last USDC.e Transfer** | {last_usdc_transfer_time:<30} |", readme_content)
 
 # Remove USDC.e Bridge Balance if it exists
 readme_content = re.sub(r"\|\s*\*\*USDC.e Bridge Balance\*\*\s*\|\s*.*\n?", "", readme_content)

@@ -14,6 +14,7 @@ Public, Intel  monitoring for the XDC Network.
 | **Last Large Transfer** |
 | **Last USDC.e Transfer** | {last_usdc_transfer:<30} |
 | **USDC.e Bridge Balance** | {bridge_balance:<30} | Detected (3 transfers ≥ $5,000) |
+| **USDC.e Bridge Balance** | {bridge_balance:<30} | Detected (3 transfers ≥ $5,000) |
 ---
 
 ## 🚨 Threat Monitoring Scope

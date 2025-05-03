@@ -22,7 +22,6 @@ import os
 readme_path = "/root/xdc-intel-reports/README.md"
 large_transfers_pattern = "/root/xdc-intel-reports/data/large_transfers_*.csv"
 usdc_transfers_pattern = "/root/xdc-intel-reports/data/usdc_bridge_transfers_*.csv"
-balance_file = "/root/xdc-intel-reports/data/usdc_bridge_balance.txt"
 
 # Load latest large transfers file safely
 large_transfers_files = glob.glob(large_transfers_pattern)
@@ -49,12 +48,6 @@ if usdc_transfers_files:
         usdc_transfers_df = pd.DataFrame()
 else:
     usdc_transfers_df = pd.DataFrame()
-
-# Load USDC.e bridge balance
-bridge_balance = "N/A"
-if os.path.exists(balance_file):
-    with open(balance_file, 'r') as f:
-        bridge_balance = float(f.read().strip())
 
 # Determine the most recent scan time
 latest_scan_time = None

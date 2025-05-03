@@ -287,4 +287,23 @@ def process_transactions():
         
         # Write to temporary file
         with open(temp_path, "w", newline="") as f:
-            writer = csv.DictWriter(f,
+            writer = csv.DictWriter(f, fieldnames=['tx_hash', 'from', 'to', 'value_xdc', 'value_usd', 'token_symbol', 'block_number', 'timestamp'])
+            writer.writeheader()
+            for tx in large_transactions:
+                writer.writerow(tx)
+        
+        # Rename temporary file to final file
+        os.rename(temp_path, output_path)
+        logging.info(f"Saved {len(large_transactions)} large transactions to {output_path}")
+    else:
+        logging.info("No large transactions found")
+
+    # Save the last processed block
+    save_last_block(end_block)
+
+if __name__ == "__main__":
+    try:
+        process_transactions()
+    except Exception as e:
+        logging.error(f"Script failed: {str(e)}")
+        raise
